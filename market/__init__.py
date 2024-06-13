@@ -1,6 +1,6 @@
 import os
 import sqlalchemy
-from flask import Flask, render_template, redirect, url_for, flash, get_flashed_messages
+from flask import Flask, render_template, redirect, url_for, flash, get_flashed_messages, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
@@ -20,6 +20,8 @@ db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 
 login_manager = LoginManager(app)
+login_manager.login_view = "login"
+login_manager.login_message_category = "info"
 
 # Import routes after creating the app and db
 from market import routes

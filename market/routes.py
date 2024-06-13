@@ -1,20 +1,46 @@
 from market import app
-from . import render_template, redirect, url_for, flash
+from . import render_template, redirect, url_for, flash, request
 from .modules import Item, User
-from .forms import RegisterForm, LoginForm
+from .forms import RegisterForm, LoginForm, PurchaseItemForm, SellItemForm
 from . import db
 from sqlalchemy.exc import IntegrityError
-from flask_login import login_user
+from flask_login import login_user, logout_user, login_required, current_user
 
 @app.route('/')
 @app.route('/home')
 def home_page():
     return render_template('home.html')
 
-@app.route('/market')
+@app.route('/market', methods=['GET', 'POST'])
+@login_required
 def market():
-    items = Item.query.all()
-    return render_template('market.html', items=items)
+    purchase_form = PurchaseItemForm()
+    sell_form = SellItemForm()
+    if request.method == "POST":
+        # Purchase item logic
+        purchased_item = request.form.get('purchased_item')
+        p_item_object = Item.query.filter_by(name=purchased_item).first()
+        if p_item_object:
+            if current_user.can_purchase(p_item_object):
+                p_item_object.buy(current_user)
+                flash(f"Congratulations! You purchased {p_item_object.name} for ${p_item_object.price}.", category='success')
+            else:
+                flash(f"Unfortunately, you don't have enough money to purchase {p_item_object}!", category='danger')
+
+        # Sell item logic
+        sold_item = request.form.get('sold_item')
+        s_item_object = Item.query.filter_by(name=sold_item).first()
+        if s_item_object:
+            if current_user.can_sell(s_item_object):
+                s_item_object.sell(current_user)
+                flash(f"Congratulations! You sold {s_item_object.name} back to the Market.", category='success')
+            else:
+                flash(f"Something went wrong with selling {s_item_object.name}!", category='danger')
+        return redirect(url_for('market'))
+    if request.method == "GET":
+        items = Item.query.filter_by(owner=None)
+        owned_items = Item.query.filter_by(owner=current_user.id)
+        return render_template('market.html', items=items, purchase_form=purchase_form, owned_items=owned_items, sell_form=sell_form)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -26,6 +52,8 @@ def register():
         db.session.add(user_to_create)
         try:
             db.session.commit()
+            login_user(user_to_create)
+            flash(f'Account created successfully! You are now logged in as {user_to_create.username}', category='success')
             return redirect(url_for('market'))
         except IntegrityError:
             db.session.rollback()
@@ -48,6 +76,12 @@ def login():
         else:
             flash('Username and password are not match! Please try again!', category='danger')
     return render_template('login.html', form=form)
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    flash("You have been logged out!", category='info')
+    return redirect(url_for("home_page"))
 
 # @app.route('/about/<username>')
 # def about(username):
